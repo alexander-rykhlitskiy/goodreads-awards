@@ -1,4 +1,5 @@
 import { fetchAndCacheHtml } from "./fetchAndCacheHtml.js";
+import CachedFetcher from "./CachedFetcher.js";
 import jsdom from "jsdom";
 
 const { JSDOM } = jsdom;
@@ -23,39 +24,43 @@ const text = (node, selector) =>
   node.querySelector(selector).textContent.trim().replace(/\s+/g, " ");
 const number = (string) => Number(string.replace(",", "").match(/^[\d\.]+/));
 
-const country = async (authorNodeA) => {
-  const authorDom = new JSDOM(
-    await fetchAndCacheHtml(
-      authorNodeA.href.match(/[^\/]+$/),
-      authorNodeA.href,
-      {
-        cacheSubfolder: "goodreads-booker/authors",
-      }
-    )
-  );
-  const bornDiv = authorDom.window.document.querySelector(".dataTitle");
-  if (!bornDiv) return null;
+const fetchAuthor = async (authorNodeA) => {
+  const fetcher = new CachedFetcher({
+    cacheSubfolder: "goodreads-booker/authors",
+  });
+  const code = authorNodeA.href.match(/[^\/]+$/)[0];
+  const author = await fetcher.fetchData(code, authorNodeA.href, {
+    extractData: (document) => {
+      const bornDiv = document.querySelector(".dataTitle");
+      if (!bornDiv) return {};
 
-  const locationText = bornDiv.nextSibling.textContent.trim();
-  const words = locationText.split(",");
-  return words[words.length - 1].trim();
+      const locationText = bornDiv.nextSibling.textContent.trim();
+      const words = locationText.split(",");
+      return { country: words[words.length - 1].trim() };
+    },
+  });
+
+  return author;
 };
 
-const tags = async (bookNodeA) => {
+const fetchBook = async (bookNodeA) => {
+  const code = bookNodeA.href.match(/[^\/]+$/)[0];
   const href = bookNodeA.href.startsWith("https://")
     ? bookNodeA.href
     : "https://www.goodreads.com" + bookNodeA.href;
-  const bookDom = new JSDOM(
-    await fetchAndCacheHtml(bookNodeA.href.match(/[^\/]+$/), href, {
-      cacheSubfolder: "goodreads-booker/books",
-    })
-  );
-  const tags = bookDom.window.document.querySelectorAll(
-    ".BookPageMetadataSection__genreButton"
-  );
-  return Array.from(tags)
-    .map((tag) => tag.textContent.trim())
-    .join(", ");
+  const fetcher = new CachedFetcher({
+    cacheSubfolder: "goodreads-booker/books",
+  });
+  const book = await fetcher.fetchData(code, href, {
+    extractData: (document) => {
+      const tagNodes = document.querySelectorAll(
+        ".BookPageMetadataSection__genreButton"
+      );
+      const tags = Array.from(tagNodes).map((tag) => tag.textContent.trim());
+      return { tags };
+    },
+  });
+  return book;
 };
 
 for (let i = 0; i <= 19; i++) {
@@ -69,7 +74,8 @@ for (let i = 0; i <= 19; i++) {
     const minirating = text(infoTd, ".minirating").split(" — ");
     const award =
       infoTd.children[infoTd.children.length - 1].textContent.trim();
-
+    const author = await fetchAuthor(infoTd.querySelector(".authorName"));
+    const book = await fetchBook(infoTd.querySelector(".bookTitle"));
     const info = {
       title: text(infoTd, ".bookTitle"),
       author: text(infoTd, ".authorName"),
@@ -77,8 +83,8 @@ for (let i = 0; i <= 19; i++) {
       ratings: number(minirating[1]),
       award: award.replace(/\s*\(\d+\)/, ""),
       year: award.match(/\((\d+)\)/)[1],
-      authorCountry: await country(infoTd.querySelector(".authorName")),
-      tags: await tags(infoTd.querySelector(".bookTitle")),
+      authorCountry: author.country,
+      tags: book.tags,
     };
     console.log(Object.values(info).join("\t"));
   }

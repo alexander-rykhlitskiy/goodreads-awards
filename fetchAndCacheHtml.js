@@ -1,9 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-import jsdom from "jsdom";
-const { JSDOM } = jsdom;
-
 const cacheFolder = "cache";
 
 const fetchAndCacheHtml = async (
@@ -31,35 +28,5 @@ const fetchAndCacheHtml = async (
   return html;
 };
 
-// const fetchAndCacheJSONData = async (
-//   code,
-//   url,
-//   { extractData, cacheSubfolder, logging } = { logging: true }
-// ) => {
-//   const fileName = `${code}.json`;
-//   const folder = path.join(cacheFolder, cacheSubfolder || "");
-
-//   const html = await fetchAndCacheHtml(code, url, {
-//     cacheSubfolder,
-//     logging,
-//   });
-//   const dom = new JSDOM(html)
-//   const jsonData = extractData(dom.window.document);
-//   const cacheFilePath = path.join(folder, fileName);
-
-// }
-
-// class CachedFetcher {
-//   constructor(cacheSubfolder, logging = true) {
-//     this.cacheSubfolder = cacheSubfolder;
-//     this.logging = logging;
-//   }
-//   async fetch(code, url, { logging } = { logging: true }) {
-//     return fetchAndCacheHtml(code, url, {
-//       cacheSubfolder: this.cacheSubfolder,
-//       logging,
-//     });
-//   }
-// }
 
 export { fetchAndCacheHtml };
