@@ -4,31 +4,18 @@ import jsdom from "jsdom";
 
 const { JSDOM } = jsdom;
 
-// const wikiUrl = `https://en.wikipedia.org/wiki/List_of_winners_and_nominated_authors_of_the_Booker_Prize`;
-// const wikiDom = new JSDOM(
-//   await fetchAndCacheHtml(word, url, { cacheSubfolder: "goodreads-booker" })
-// );
-// const document = wikiDom.window.document;
+const baseUrl = process.argv[2];
 
-// const winnerTrs = [];
-// for (const tr of document.querySelectorAll("tr")) {
-//   if (tr.querySelector("td").textContent.includes("Winner")) {
-//     winnerTrs.push(tr);
-//   }
-// }
-// wikiDocument.querySelector(
-//   '[style="background:#FAEB86; white-space:nowrap; color:black"]'
-// );
-
-const text = (node, selector) =>
+const toText = (node, selector) =>
   node.querySelector(selector).textContent.trim().replace(/\s+/g, " ");
-const number = (string) => Number(string.replace(",", "").match(/^[\d\.]+/));
+const toNumber = (string) => Number(string.replace(",", "").match(/^[\d\.]+/));
+const pageCode = (href) => href.match(/[^\/]+$/)[0];
 
 const fetchAuthor = async (authorNodeA) => {
   const fetcher = new CachedFetcher({
-    cacheSubfolder: "goodreads-booker/authors",
+    cacheSubfolder: "goodreads/authors",
   });
-  const code = authorNodeA.href.match(/[^\/]+$/)[0];
+  const code = pageCode(authorNodeA.href);
   const author = await fetcher.fetchData(code, authorNodeA.href, {
     extractData: (document) => {
       const bornDiv = document.querySelector(".dataTitle");
@@ -44,12 +31,12 @@ const fetchAuthor = async (authorNodeA) => {
 };
 
 const fetchBook = async (bookNodeA) => {
-  const code = bookNodeA.href.match(/[^\/]+$/)[0];
+  const code = pageCode(bookNodeA.href);
   const href = bookNodeA.href.startsWith("https://")
     ? bookNodeA.href
     : "https://www.goodreads.com" + bookNodeA.href;
   const fetcher = new CachedFetcher({
-    cacheSubfolder: "goodreads-booker/books",
+    cacheSubfolder: "goodreads/books",
   });
   const book = await fetcher.fetchData(code, href, {
     extractData: (document) => {
@@ -63,29 +50,44 @@ const fetchBook = async (bookNodeA) => {
   return book;
 };
 
-for (let i = 0; i <= 19; i++) {
-  const url = `https://www.goodreads.com/award/show/13-booker-prize?page=${i}`;
+const numberOfPages = (document) => {
+  const lastPaginationLink = document.querySelector(".next_page");
+  return parseInt(lastPaginationLink.previousElementSibling.textContent);
+};
+
+const processPage = async (baseUrl, pageNumber) => {
+  const url = baseUrl + `?page=${pageNumber}`;
   const dom = new JSDOM(
-    await fetchAndCacheHtml(i, url, { cacheSubfolder: "goodreads-booker" })
+    await fetchAndCacheHtml(pageNumber, url, {
+      cacheSubfolder: "goodreads/" + pageCode(baseUrl),
+    })
   );
   const document = dom.window.document;
   for (const tr of document.querySelectorAll("tr[itemscope]")) {
     const infoTd = tr.querySelector("td:nth-child(2)");
-    const minirating = text(infoTd, ".minirating").split(" — ");
+    const minirating = toText(infoTd, ".minirating").split(" — ");
     const award =
       infoTd.children[infoTd.children.length - 1].textContent.trim();
     const author = await fetchAuthor(infoTd.querySelector(".authorName"));
     const book = await fetchBook(infoTd.querySelector(".bookTitle"));
     const info = {
-      title: text(infoTd, ".bookTitle"),
-      author: text(infoTd, ".authorName"),
-      rating: number(minirating[0]),
-      ratings: number(minirating[1]),
+      title: toText(infoTd, ".bookTitle"),
+      author: toText(infoTd, ".authorName"),
+      rating: toNumber(minirating[0]),
+      ratings: toNumber(minirating[1]),
       award: award.replace(/\s*\(\d+\)/, ""),
-      year: award.match(/\((\d+)\)/)[1],
+      year: award.match(/\((\d+)\)/)?.[1],
       authorCountry: author.country,
       tags: book.tags,
     };
     console.log(Object.values(info).join("\t"));
   }
+
+  return document;
+};
+
+const document = await processPage(baseUrl, 1);
+
+for (let i = 2; i <= numberOfPages(document); i++) {
+  processPage(baseUrl, i);
 }
