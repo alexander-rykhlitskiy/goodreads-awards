@@ -1,6 +1,7 @@
 import { fetchAndCacheHtml } from "./fetchAndCacheHtml.js";
 import CachedFetcher from "./CachedFetcher.js";
 import jsdom from "jsdom";
+import fs from "fs";
 
 const { JSDOM } = jsdom;
 
@@ -55,6 +56,8 @@ const numberOfPages = (document) => {
   return parseInt(lastPaginationLink.previousElementSibling.textContent);
 };
 
+const books = [];
+
 const processPage = async (baseUrl, pageNumber) => {
   const url = baseUrl + `?page=${pageNumber}`;
   const dom = new JSDOM(
@@ -69,8 +72,8 @@ const processPage = async (baseUrl, pageNumber) => {
     const award =
       infoTd.children[infoTd.children.length - 1].textContent.trim();
     const author = await fetchAuthor(infoTd.querySelector(".authorName"));
-    const book = await fetchBook(infoTd.querySelector(".bookTitle"));
-    const info = {
+    const bookDetails = await fetchBook(infoTd.querySelector(".bookTitle"));
+    const book = {
       title: toText(infoTd, ".bookTitle"),
       author: toText(infoTd, ".authorName"),
       rating: toNumber(minirating[0]),
@@ -78,9 +81,11 @@ const processPage = async (baseUrl, pageNumber) => {
       award: award.replace(/\s*\(\d+\)/, ""),
       year: award.match(/\((\d+)\)/)?.[1],
       authorCountry: author.country,
-      tags: book.tags,
+      tags: bookDetails.tags,
     };
-    console.log(Object.values(info).join("\t"));
+    const bookCsv = Object.values(book).join("\t");
+    books.push(bookCsv);
+    console.log(bookCsv);
   }
 
   return document;
@@ -89,5 +94,7 @@ const processPage = async (baseUrl, pageNumber) => {
 const document = await processPage(baseUrl, 1);
 
 for (let i = 2; i <= numberOfPages(document); i++) {
-  processPage(baseUrl, i);
+  await processPage(baseUrl, i);
 }
+
+fs.writeFileSync(`${pageCode(baseUrl)}.csv`, books.join('\n'))
