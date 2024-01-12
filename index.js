@@ -1,7 +1,7 @@
-import { fetchAndCacheHtml } from "./fetchAndCacheHtml.js";
-import CachedFetcher from "./CachedFetcher.js";
 import jsdom from "jsdom";
 import fs from "fs";
+
+import CachedFetcher from "./CachedFetcher.js";
 
 const { JSDOM } = jsdom;
 
@@ -60,11 +60,10 @@ const books = [];
 
 const processPage = async (baseUrl, pageNumber) => {
   const url = baseUrl + `?page=${pageNumber}`;
-  const dom = new JSDOM(
-    await fetchAndCacheHtml(pageNumber, url, {
-      cacheSubfolder: "goodreads/" + pageCode(baseUrl),
-    })
-  );
+  const fetcher = new CachedFetcher({
+    cacheSubfolder: "goodreads/" + pageCode(baseUrl),
+  });
+  const dom = new JSDOM(await fetcher.fetchHtml(pageNumber, url));
   const document = dom.window.document;
   for (const tr of document.querySelectorAll("tr[itemscope]")) {
     const infoTd = tr.querySelector("td:nth-child(2)");
@@ -97,4 +96,4 @@ for (let i = 2; i <= numberOfPages(document); i++) {
   await processPage(baseUrl, i);
 }
 
-fs.writeFileSync(`${pageCode(baseUrl)}.csv`, books.join('\n'))
+fs.writeFileSync(`${pageCode(baseUrl)}.csv`, books.join("\n"));
